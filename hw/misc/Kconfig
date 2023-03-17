@@ -180,4 +180,7 @@ config AXP209_PMU
     bool
     depends on I2C
 
+config MT7628_SYSCTRL
+    bool
+
 source macio/Kconfig
