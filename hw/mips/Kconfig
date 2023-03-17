@@ -10,6 +10,18 @@ config MIPSSIM
     select SERIAL_ISA
     select MIPSNET
 
+config MT7628
+    bool
+    select MT7628_SYSCTRL
+    select MT7628_INTC
+    select MT7628_SPI
+    select SERIAL
+    select SSI_M25P80
+    select USB_EHCI
+    select USB_EHCI_SYSBUS
+    select USB_OHCI
+    select UNIMP
+
 config JAZZ
     bool
     select ISA_BUS
