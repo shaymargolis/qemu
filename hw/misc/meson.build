@@ -141,3 +141,6 @@ softmmu_ss.add(when: 'CONFIG_SBSA_REF', if_true: files('sbsa_ec.c'))
 
 # HPPA devices
 softmmu_ss.add(when: 'CONFIG_LASI', if_true: files('lasi.c'))
+
+# mt7628
+softmmu_ss.add(when: 'CONFIG_MT7628_SYSCTRL', if_true: files('mt7628-sysctrl.c'))
