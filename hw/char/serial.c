@@ -334,7 +334,7 @@ static void serial_ioport_write(void *opaque, hwaddr addr, uint64_t val,
 {
     SerialState *s = opaque;
 
-    assert(size == 1 && addr < 8);
+    assert(size == 1 && addr < 0x18);
     trace_serial_write(addr, val);
     switch(addr) {
     default:
@@ -356,6 +356,7 @@ static void serial_ioport_write(void *opaque, hwaddr addr, uint64_t val,
             s->lsr &= ~UART_LSR_TEMT;
             serial_update_irq(s);
             if (s->tsr_retry == 0) {
+                // printf("%c", (char)val);
                 serial_xmit(s);
             }
         }
@@ -471,7 +472,7 @@ static uint64_t serial_ioport_read(void *opaque, hwaddr addr, unsigned size)
     SerialState *s = opaque;
     uint32_t ret;
 
-    assert(size == 1 && addr < 8);
+    assert(size == 1 && addr < 0x18);
     switch(addr) {
     default:
     case 0:
@@ -546,6 +547,9 @@ static uint64_t serial_ioport_read(void *opaque, hwaddr addr, unsigned size)
         break;
     case 7:
         ret = s->scr;
+        break;
+    case 0x14:
+        ret = 0xffffffff;
         break;
     }
     trace_serial_read(addr, ret);
@@ -1047,7 +1051,7 @@ static void serial_mm_realize(DeviceState *dev, Error **errp)
 
     memory_region_init_io(&s->io, OBJECT(dev),
                           &serial_mm_ops[smm->endianness], smm, "serial",
-                          8 << smm->regshift);
+                          0x18 << smm->regshift);
     sysbus_init_mmio(SYS_BUS_DEVICE(smm), &s->io);
     sysbus_init_irq(SYS_BUS_DEVICE(smm), &smm->serial.irq);
 }
