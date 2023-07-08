@@ -118,21 +118,57 @@ static void main_cpu_reset(void *opaque)
     }
 }
 
-static void mipsnet_init(int base, qemu_irq irq, NICInfo *nd)
+// static void mipsnet_init(int base, qemu_irq irq, NICInfo *nd)
+// {
+//     DeviceState *dev;
+//     SysBusDevice *s;
+
+//     dev = qdev_new("mipsnet");
+//     qdev_set_nic_properties(dev, nd);
+
+//     s = SYS_BUS_DEVICE(dev);
+//     sysbus_realize_and_unref(s, &error_fatal);
+//     sysbus_connect_irq(s, 0, irq);
+//     memory_region_add_subregion(get_system_io(),
+//                                 base,
+//                                 sysbus_mmio_get_region(s, 0));
+// }
+
+#define EW_DRIVER_NOT_WRITTEN (0)
+#define EW_DRIVER_WROTE_SUCCESS (1)
+
+static int ew_driver_state = EW_DRIVER_NOT_WRITTEN;
+
+static uint64_t ew_driver_read(void *opaque, hwaddr addr,
+                               unsigned size)
 {
-    DeviceState *dev;
-    SysBusDevice *s;
+    int val = ew_driver_state;
+    if (val == EW_DRIVER_WROTE_SUCCESS) {
+        ew_driver_state = EW_DRIVER_NOT_WRITTEN;
+    }
 
-    dev = qdev_new("mipsnet");
-    qdev_set_nic_properties(dev, nd);
+    if (addr == 0xc4) {
+        return val;
+    }
 
-    s = SYS_BUS_DEVICE(dev);
-    sysbus_realize_and_unref(s, &error_fatal);
-    sysbus_connect_irq(s, 0, irq);
-    memory_region_add_subregion(get_system_io(),
-                                base,
-                                sysbus_mmio_get_region(s, 0));
+    return -1;
 }
+
+static void ew_driver_write(void *opaque, hwaddr addr,
+                            uint64_t value, unsigned size)
+{
+    if (addr == 0xc0) {
+        ew_driver_state = EW_DRIVER_WROTE_SUCCESS;
+    }
+}
+
+const MemoryRegionOps ew_driver_ops = {
+    .read = ew_driver_read,
+    .write = ew_driver_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid.max_access_size = 4,
+    .impl.max_access_size = 4,
+};
 
 static void
 mips_mipssim_init(MachineState *machine)
@@ -140,10 +176,12 @@ mips_mipssim_init(MachineState *machine)
     const char *kernel_filename = machine->kernel_filename;
     const char *kernel_cmdline = machine->kernel_cmdline;
     const char *initrd_filename = machine->initrd_filename;
+    ram_addr_t ram_size = machine->ram_size;
     char *filename;
     MemoryRegion *address_space_mem = get_system_memory();
     MemoryRegion *isa = g_new(MemoryRegion, 1);
     MemoryRegion *bios = g_new(MemoryRegion, 1);
+    MemoryRegion *readonly_ram = g_new(MemoryRegion, 1);
     Clock *cpuclk;
     MIPSCPU *cpu;
     CPUMIPSState *env;
@@ -156,6 +194,8 @@ mips_mipssim_init(MachineState *machine)
 #else
     clock_set_hz(cpuclk, 12000000); /* 12 MHz */
 #endif
+
+    clock_set_hz(cpuclk, 575000000); /* 575 MHz */
 
     /* Init CPUs. */
     cpu = mips_cpu_create_with_clock(machine->cpu_type, cpuclk);
@@ -172,14 +212,15 @@ mips_mipssim_init(MachineState *machine)
 
     memory_region_add_subregion(address_space_mem, 0x00000000, machine->ram);
 
-    env->active_tc.PC = (target_long)(int32_t)0xbfc00000;
+    memory_region_init_rom(readonly_ram, NULL, "RAM_READONLY", 0x10000000 - ram_size, &error_fatal);
+    memory_region_add_subregion(address_space_mem, ram_size, readonly_ram);
 
     /* Map the BIOS / boot exception handler. */
-    memory_region_add_subregion(address_space_mem, 0x1fc00000LL, bios);
+    memory_region_add_subregion(address_space_mem, 0x1c030000LL, bios);
     /* Load a BIOS / boot exception handler image. */
     filename = qemu_find_file(QEMU_FILE_TYPE_BIOS, machine->firmware ?: BIOS_FILENAME);
     if (filename) {
-        bios_size = load_image_targphys(filename, 0x1fc00000LL, BIOS_SIZE);
+        bios_size = load_image_targphys(filename, 0x1c030000LL, BIOS_SIZE);
         g_free(filename);
     } else {
         bios_size = -1;
@@ -191,7 +232,7 @@ mips_mipssim_init(MachineState *machine)
         exit(1);
     } else {
         /* We have a boot vector start address. */
-        env->active_tc.PC = (target_long)(int32_t)0xbfc00000;
+        env->active_tc.PC = (target_long)(int32_t)0xbc030000;
     }
 
     if (kernel_filename) {
@@ -209,11 +250,34 @@ mips_mipssim_init(MachineState *machine)
     /* Register 64 KB of ISA IO space at 0x1fd00000. */
     memory_region_init_alias(isa, NULL, "isa_mmio",
                              get_system_io(), 0, 0x000200000);
-    memory_region_add_subregion(get_system_memory(), 0x10000000, isa);
+    // memory_region_add_subregion(get_system_memory(), 0x10000000, isa);
 
-    
-    serial_mm_init(isa, 0 + 0xc00, 20, env->irq[4],
+    MemoryRegion *test123 = g_new(MemoryRegion, 1);
+    memory_region_init_ram(test123, NULL, "test123", 0xf00, &error_fatal);
+    memory_region_add_subregion(get_system_memory(), 0x10000000LL, test123);
+
+    // void memory_region_init_io(MemoryRegion *mr,
+    //                        Object *owner,
+    //                        const MemoryRegionOps *ops,
+    //                        void *opaque,
+    //                        const char *name,
+    //                        uint64_t size);
+
+    MemoryRegion *test124 = g_new(MemoryRegion, 1);
+    memory_region_init_io(test124, NULL, &ew_driver_ops, NULL, "", 0xf00);
+    memory_region_add_subregion(get_system_memory(), 0x10110000LL, test124);
+
+    MemoryRegion *eth_random = g_new(MemoryRegion, 1);
+    memory_region_init_ram(eth_random, NULL, "eth_random", 0x1000, &error_fatal);
+    memory_region_add_subregion(get_system_memory(), 0x10100000LL, eth_random);
+
+    // rom_add_blob_fixed("read", buff, 0, 0x10000400LL);
+
+    serial_mm_init(get_system_memory(), 0x10000000LL + 0xc00, 2, env->irq[4],
                              115200, serial_hd(0), DEVICE_NATIVE_ENDIAN);
+
+    env->active_tc.PC = (target_long)(int32_t)0xbc030000;
+    reset_info->vector = (target_long)(int32_t)0xbc030000;
 
     /*
      * A single 16450 sits at offset 0x3f8. It is attached to
@@ -231,9 +295,9 @@ mips_mipssim_init(MachineState *machine)
     //                   sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0));
     // }
 
-    if (nd_table[0].used)
-        /* MIPSnet uses the MIPS CPU INT0, which is interrupt 2. */
-        mipsnet_init(0x4200, env->irq[2], &nd_table[0]);
+    // if (nd_table[0].used)
+    //     /* MIPSnet uses the MIPS CPU INT0, which is interrupt 2. */
+    //     mipsnet_init(0x4200, env->irq[2], &nd_table[0]);
 }
 
 static void mips_mipssim_machine_init(MachineClass *mc)
