@@ -6,6 +6,10 @@ config SIFIVE_SPI
     bool
     select SSI
 
+config MT7621_SPI
+    bool
+    select SSI
+
 config SSI
     bool
 
