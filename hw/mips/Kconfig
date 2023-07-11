@@ -3,12 +3,18 @@ config MALTA
     select GT64120
     select ISA_SUPERIO
     select PIIX4
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config MIPSSIM
     bool
     select ISA_BUS
     select SERIAL_ISA
     select MIPSNET
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config JAZZ
     bool
@@ -29,10 +35,16 @@ config JAZZ
     select PARALLEL
     select DS1225Y
     select JAZZ_LED
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config FULOONG
     bool
     select PCI_BONITO
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config LOONGSON3V
     bool
@@ -45,11 +57,17 @@ config LOONGSON3V
     select PCI_EXPRESS_GENERIC_BRIDGE
     select MSI_NONBROKEN
     select FW_CFG_MIPS
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config MIPS_CPS
     bool
     select PTIMER
     select MIPS_ITU
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config MIPS_BOSTON
     bool
@@ -58,6 +76,9 @@ config MIPS_BOSTON
     select PCI_EXPRESS_XILINX
     select AHCI_ICH9
     select SERIAL
+    select SSI
+    select SSI_M25P80
+    select MT7621_SPI
 
 config FW_CFG_MIPS
     bool
