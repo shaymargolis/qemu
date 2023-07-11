@@ -33,6 +33,7 @@
 #include "hw/mips/cpudevs.h"
 #include "hw/char/serial.h"
 #include "hw/isa/isa.h"
+#include "hw/ssi/ssi.h"
 #include "net/net.h"
 #include "sysemu/sysemu.h"
 #include "hw/boards.h"
@@ -253,8 +254,12 @@ mips_mipssim_init(MachineState *machine)
     // memory_region_add_subregion(get_system_memory(), 0x10000000, isa);
 
     MemoryRegion *test123 = g_new(MemoryRegion, 1);
-    memory_region_init_ram(test123, NULL, "test123", 0xf00, &error_fatal);
+    memory_region_init_ram(test123, NULL, "test123", 0xb00, &error_fatal);
     memory_region_add_subregion(get_system_memory(), 0x10000000LL, test123);
+
+    MemoryRegion *more_ram = g_new(MemoryRegion, 1);
+    memory_region_init_ram(more_ram, NULL, "more_ram", 0x300, &error_fatal);
+    memory_region_add_subregion(get_system_memory(), 0x10000c00LL, more_ram);
 
     // void memory_region_init_io(MemoryRegion *mr,
     //                        Object *owner,
@@ -270,6 +275,36 @@ mips_mipssim_init(MachineState *machine)
     MemoryRegion *eth_random = g_new(MemoryRegion, 1);
     memory_region_init_ram(eth_random, NULL, "eth_random", 0x1000, &error_fatal);
     memory_region_add_subregion(get_system_memory(), 0x10100000LL, eth_random);
+
+    // SPI reg = <0xb00 0x100>;
+
+    DeviceState *dev = sysbus_create_simple("mt7621_spi", 0x10000b00, env->irq[1]);
+
+    BusState *spi_bus;
+    DeviceState *flash_dev;
+    qemu_irq flash_cs;
+    DriveInfo *dinfo = drive_get(IF_MTD, 0, 0);
+
+    spi_bus = qdev_get_child_bus(dev, "spi");
+
+    flash_dev = qdev_new("w25q64");
+    if (dinfo) {
+        qdev_prop_set_drive_err(flash_dev, "drive",
+                                blk_by_legacy_dinfo(dinfo), &error_fatal);
+    }
+    qdev_realize_and_unref(flash_dev, spi_bus, &error_fatal);
+
+    flash_cs = qdev_get_gpio_in_named(flash_dev, SSI_GPIO_CS, 0);
+    qdev_connect_gpio_out_named(DEVICE(dev), "cs", 0, flash_cs);
+
+    sysbus_connect_irq(SYS_BUS_DEVICE(dev), 0, env->irq[1]);
+
+    // PCI reg = <0x10140000 0x100
+    //            0x10142000 0x100>;
+
+    MemoryRegion *pci_region_1 = g_new(MemoryRegion, 1);
+    memory_region_init_ram(pci_region_1, NULL, "pci_region_1", 0x10000, &error_fatal);
+    memory_region_add_subregion(get_system_memory(), 0x10140000LL, pci_region_1);
 
     // rom_add_blob_fixed("read", buff, 0, 0x10000400LL);
 
