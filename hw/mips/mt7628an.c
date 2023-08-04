@@ -34,6 +34,7 @@
 #include "hw/char/serial.h"
 #include "hw/isa/isa.h"
 #include "hw/ssi/ssi.h"
+#include "hw/irq.h"
 #include "net/net.h"
 #include "sysemu/sysemu.h"
 #include "hw/boards.h"
@@ -171,6 +172,149 @@ const MemoryRegionOps ew_driver_ops = {
     .impl.max_access_size = 4,
 };
 
+static QEMUTimer *ra_systick = NULL;
+
+// #define SYSTICK_FREQ        (50 * 1000)
+#define SYSTICK_FREQ        (50 * 1000)
+#define SYSTICK_INTERVAL_NS ((u32)(1e9/ SYSTICK_FREQ))
+
+#define SYSTICK_CONFIG      (0x00)
+#define SYSTICK_COMPARE     (0x04)
+#define SYSTICK_COUNT       (0x08)
+
+/* route systick irq to mips irq 7 instead of the r4k-timer */
+#define CFG_EXT_STK_EN      (0x2)
+/* enable the counter */
+#define CFG_CNT_EN      (0x1)
+
+typedef unsigned int u32;
+
+static bool systick_enabled = false;
+static u32 systick_config = 0;
+static u32 systick_compare = 0;
+static u32 systick_count = 0;
+
+/* MIPS R4K timer */
+static void rasystick_timer_update(CPUMIPSState *env)
+{
+    uint64_t now_ns, next_ns;
+
+    now_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    next_ns = now_ns + SYSTICK_INTERVAL_NS;
+    // printf("Modding to %lu\n", next_ns);
+    timer_mod(ra_systick, next_ns);
+}
+
+/* Expire the timer.  */
+static void rasystick_timer_expire(CPUMIPSState *env)
+{
+    rasystick_timer_update(env);
+
+    if (!systick_enabled) {
+        return;
+    }
+
+    systick_count++;
+
+    if (systick_count > systick_compare) {
+        systick_count = systick_compare;
+    }
+
+    if (systick_count < systick_compare) {
+        return;
+    }
+
+    env->CP0_Cause |= 1 << CP0Ca_TI;
+
+    printf("Raising irq\n");
+
+    // qemu_irq_raise(env->irq[5]);
+    qemu_irq_raise(env->irq[7]);
+}
+
+static void rasystick_timer_cb(void *opaque)
+{
+    CPUMIPSState *env;
+
+    env = opaque;
+
+    rasystick_timer_expire(env);
+}
+
+static void create_ra_systick(CPUMIPSState *env)
+{
+    ra_systick = timer_new_ns(QEMU_CLOCK_VIRTUAL, &rasystick_timer_cb, env);
+    rasystick_timer_cb(env);
+}
+
+
+static uint64_t ra_systick_read(void *opaque, hwaddr addr,
+                               unsigned size)
+{
+    u32 val;
+
+    switch(addr) {
+    case SYSTICK_CONFIG:
+        val = systick_config;
+        break;
+    case SYSTICK_COUNT:
+        val = systick_count;
+        break;
+    case SYSTICK_COMPARE:
+        val = systick_compare;
+        break;
+    default:
+        val = -1;
+        break;
+    }
+
+    // printf("<ra_systick> Read 0x%08X %08X\n", (u32)addr, val);
+
+    return val;
+}
+
+static void ra_systick_write(void *opaque, hwaddr addr,
+                            uint64_t value, unsigned size)
+{
+    CPUMIPSState *env;
+    env = opaque;
+    u32 val = (u32)value;
+
+    // printf("<ra_systick> Wrote 0x%08X %08X\n", (u32)addr, val);
+
+    switch(addr) {
+    case SYSTICK_CONFIG:
+        systick_config = val;
+
+        systick_enabled = (systick_config & CFG_CNT_EN) != 0;
+
+        if (systick_enabled) {
+            timer_del(env->timer);
+        }
+        break;
+    case SYSTICK_COUNT:
+        // Disallow writing to the count
+        // systick_count = val;
+        break;
+    case SYSTICK_COMPARE:
+        systick_compare = val;
+        systick_count = 0;
+        qemu_irq_lower(env->irq[7]);
+        break;
+    default:
+        val = -1;
+        break;
+    }
+}
+
+const MemoryRegionOps ra_systick_ops = {
+    .read = ra_systick_read,
+    .write = ra_systick_write,
+    .endianness = DEVICE_NATIVE_ENDIAN,
+    .valid.max_access_size = 4,
+    .impl.max_access_size = 4,
+};
+
 static void
 mips_mipssim_init(MachineState *machine)
 {
@@ -197,6 +341,7 @@ mips_mipssim_init(MachineState *machine)
 #endif
 
     clock_set_hz(cpuclk, 575000000); /* 575 MHz */
+    // clock_set_hz(cpuclk, 57500000); /* 57.5 MHz */
 
     /* Init CPUs. */
     cpu = mips_cpu_create_with_clock(machine->cpu_type, cpuclk);
@@ -272,6 +417,15 @@ mips_mipssim_init(MachineState *machine)
     memory_region_init_io(test124, NULL, &ew_driver_ops, NULL, "", 0xf00);
     memory_region_add_subregion(get_system_memory(), 0x10110000LL, test124);
 
+    // Timer
+
+    create_ra_systick(env);
+    MemoryRegion *ra_systick = g_new(MemoryRegion, 1);
+    memory_region_init_io(ra_systick, NULL, &ra_systick_ops, env, "ra_systick", 0x00c);
+    memory_region_add_subregion(get_system_memory(), 0x10000500LL, ra_systick);
+
+    // ---
+
     MemoryRegion *eth_random = g_new(MemoryRegion, 1);
     memory_region_init_ram(eth_random, NULL, "eth_random", 0x1000, &error_fatal);
     memory_region_add_subregion(get_system_memory(), 0x10100000LL, eth_random);
@@ -308,7 +462,7 @@ mips_mipssim_init(MachineState *machine)
 
     // rom_add_blob_fixed("read", buff, 0, 0x10000400LL);
 
-    serial_mm_init(get_system_memory(), 0x10000000LL + 0xc00, 2, env->irq[4],
+    serial_mm_init(get_system_memory(), 0x10000000LL + 0xc00, 2, env->irq[2],
                              115200, serial_hd(0), DEVICE_NATIVE_ENDIAN);
 
     env->active_tc.PC = (target_long)(int32_t)0xbc030000;
