@@ -239,6 +239,46 @@ static bool ralink_mac_can_receive(NetClientState *nc)
 
 static ssize_t ralink_mac_receive(NetClientState *nc, const uint8_t *buf, size_t size)
 {
+    RalinkMacState *s = qemu_get_nic_opaque(nc);
+    AddressSpace *as = &s->dma_as;
+    g_print_bytes("Packet From Host!", (u8 *)buf, size);
+
+    // DMA WRITE IT, DANG IT!
+
+    if (s->nic_rx_ring == 0) {
+        printf("Not warm up yet.\n");
+        return -1;
+    }
+
+    if ((s->nic_rx_dma_pointer + 1) % s->nic_rx_max == s->nic_rx_cpu_pointer) {
+        printf("Too many packets\n");
+        return -1;
+    }
+
+    printf("Got %08X and %08X\n", s->nic_rx_ring, s->nic_rx_dma_pointer);
+
+    u32 packet_ring[4];
+    dma_memory_read(as, s->nic_rx_ring + (s->nic_rx_dma_pointer * 0x10), packet_ring, 0x10, MEMTXATTRS_UNSPECIFIED);
+
+    g_print_bytes("Reading TX", (u8 *)packet_ring, 0x10);
+
+    packet_ring[1] |= (1 << 31); // Mark as ready
+    packet_ring[1] |= (size << 16); // Set size
+
+    packet_ring[3] = 0xffffffff;
+
+    g_print_bytes("Writing TX", (u8 *)packet_ring, 0x10);
+
+    // Write the packet
+    dma_memory_write(as, packet_ring[0], buf, size, MEMTXATTRS_UNSPECIFIED);
+
+    // Write the attrs
+    dma_memory_write(as, s->nic_rx_ring + (s->nic_rx_dma_pointer * 0x10), packet_ring, 0x10, MEMTXATTRS_UNSPECIFIED);
+
+    s->nic_rx_dma_pointer = (s->nic_rx_dma_pointer + 1) % s->nic_rx_max;
+
+    qemu_set_irq(s->irq, 1);
+
     // Nothing
     return size;
 }

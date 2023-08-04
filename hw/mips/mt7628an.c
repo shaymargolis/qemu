@@ -228,7 +228,7 @@ static void rasystick_timer_expire(CPUMIPSState *env)
 
     env->CP0_Cause |= 1 << CP0Ca_TI;
 
-    printf("Raising irq\n");
+    // printf("Raising irq\n");
 
     // qemu_irq_raise(env->irq[5]);
     qemu_irq_raise(env->irq[7]);
@@ -441,6 +441,8 @@ mips_mipssim_init(MachineState *machine)
                                  OBJECT(get_system_memory()), &error_fatal);
         sysbus_realize(SYS_BUS_DEVICE(&g_ralink_mac), &error_fatal);
         sysbus_mmio_map(SYS_BUS_DEVICE(&g_ralink_mac), 0, 0x10100000LL);
+
+        sysbus_connect_irq(SYS_BUS_DEVICE(&g_ralink_mac), 0, env->irq[5]);
     }
 
     // SPI reg = <0xb00 0x100>;
