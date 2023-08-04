@@ -46,6 +46,7 @@
 #include "qemu/error-report.h"
 #include "sysemu/qtest.h"
 #include "sysemu/reset.h"
+#include "rt3050-mac.h"
 
 static struct _loaderparams {
     int ram_size;
@@ -188,6 +189,7 @@ static QEMUTimer *ra_systick = NULL;
 #define CFG_CNT_EN      (0x1)
 
 typedef unsigned int u32;
+typedef unsigned char u8;
 
 static bool systick_enabled = false;
 static u32 systick_config = 0;
@@ -315,6 +317,8 @@ const MemoryRegionOps ra_systick_ops = {
     .impl.max_access_size = 4,
 };
 
+RalinkMacState g_ralink_mac = {0};
+
 static void
 mips_mipssim_init(MachineState *machine)
 {
@@ -426,9 +430,18 @@ mips_mipssim_init(MachineState *machine)
 
     // ---
 
-    MemoryRegion *eth_random = g_new(MemoryRegion, 1);
-    memory_region_init_ram(eth_random, NULL, "eth_random", 0x1000, &error_fatal);
-    memory_region_add_subregion(get_system_memory(), 0x10100000LL, eth_random);
+    {
+        object_initialize_child(OBJECT(machine), "ralink-mac", &g_ralink_mac, TYPE_RALINK_MAC);
+
+        if (nd_table[0].used) {
+            qemu_check_nic_model(&nd_table[0], TYPE_RALINK_MAC);
+            qdev_set_nic_properties(DEVICE(&g_ralink_mac), &nd_table[0]);
+        }
+        object_property_set_link(OBJECT(&g_ralink_mac), "dma-memory",
+                                 OBJECT(get_system_memory()), &error_fatal);
+        sysbus_realize(SYS_BUS_DEVICE(&g_ralink_mac), &error_fatal);
+        sysbus_mmio_map(SYS_BUS_DEVICE(&g_ralink_mac), 0, 0x10100000LL);
+    }
 
     // SPI reg = <0xb00 0x100>;
 
