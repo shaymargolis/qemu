@@ -87,6 +87,8 @@ static void mt7628_spi_update_select(mt7628SpiState *s)
 
 static void mt7628_spi_transfer(mt7628SpiState *s)
 {
+    DPRINTF("mt7628_spi_transfer : %d %d\n", s->trans_start, s->trans_busy);
+    DPRINTF("cmd_bitcount tx_bitcount rx_bitcount : %d %d %d\n", s->cmd_bitcount, s->tx_bitcount, s->rx_bitcount);
     if (s->trans_start == 0) {
         return;
     }
@@ -94,6 +96,9 @@ static void mt7628_spi_transfer(mt7628SpiState *s)
         return;
     }
     s->trans_busy = 1;
+
+    qemu_irq_lower(s->cs_lines[0]);
+    qemu_irq_lower(s->cs_lines[1]);
 
     uint8_t txbuf[MT7628_SPI_TX_BUFSIZE];
     uint8_t *txbufp = txbuf;
@@ -107,6 +112,8 @@ static void mt7628_spi_transfer(mt7628SpiState *s)
     }
     memcpy(txbufp, &val, s->cmd_bitcount / 8);
     txbufp += s->cmd_bitcount / 8;
+    // memcpy(txbufp, &val, 1);
+    // txbufp += 1 / 8;
     memcpy(txbufp, s->dido, s->tx_bitcount / 8);
     txbufp += s->tx_bitcount / 8;
 
@@ -127,6 +134,9 @@ static void mt7628_spi_transfer(mt7628SpiState *s)
 
     s->trans_busy = 0;
     s->trans_start = 0;
+
+    qemu_irq_raise(s->cs_lines[0]);
+    qemu_irq_raise(s->cs_lines[1]);
     return;
 }
 
@@ -157,6 +167,9 @@ static uint64_t mt7628_spi_read(void *opaque, hwaddr addr, unsigned int size)
     case REG_SPI_TRANS:
         /* trans_start is always return 0 */
         val |= s->trans_busy << TRANS_BUSY;
+        val += ((s->rx_bitcount / 8) & 7) << 4;
+        val += ((s->tx_bitcount / 8) & 7);
+
         return val;
     case REG_SPI_OPADDR:
         val = s->opcode;
@@ -204,9 +217,21 @@ static void mt7628_spi_write(void *opaque, hwaddr addr,
     case REG_SPI_TRANS:
         /* trans_busy is RO */
         s->trans_start = test_bit(TRANS_START, (void *)&value);
+
+        unsigned int value32 = (unsigned int)value;
+
+        if (s->bufmode == 0 && s->trans_start == 0) {
+            s->cmd_bitcount = 0;
+            s->rx_bitcount  = ((value32 >> 4) & 7) * 8;
+            s->tx_bitcount = (value32 & 7) * 8;
+        }
+
+        DPRINTF("[mt7628-spi] Got MT7621_SPI_TRANS %08X start %d Val while rebuf %d %d %d\n", value32, s->trans_start, s->cmd_bitcount, s->rx_bitcount, s->tx_bitcount);
         break;
     case REG_SPI_OPADDR:
         s->opcode = value;
+        data_reg[0] = value;
+        DPRINTF("[mt7628-spi] Got opcode %08X\n", (unsigned int)value);
         break;
     case REG_SPI_DIDO0:
         data_reg[0] = value;
@@ -262,7 +287,7 @@ static uint64_t mt7628_spi_flash_read(void *opaque, hwaddr addr,
     uint64_t val = 0;
     uint32_t i;
 
-    DPRINTF("%s: read %x size %x\n", __func__, (uint32_t)addr, size);
+    // DPRINTF("%s: read %x size %x\n", __func__, (uint32_t)addr, size);
     s->trans_busy = 1;
     s->cs_status[0] = 1;
     s->cs_status[1] = 0;
@@ -281,7 +306,7 @@ static uint64_t mt7628_spi_flash_read(void *opaque, hwaddr addr,
     s->cs_status[1] = 0;
     mt7628_spi_update_select(s);
     s->trans_busy = 0;
-    DPRINTF("%s: read %x size %x\n", __func__, (uint32_t)addr, size);
+    // DPRINTF("%s: read %x size %x\n", __func__, (uint32_t)addr, size);
 
     return val;
 }
