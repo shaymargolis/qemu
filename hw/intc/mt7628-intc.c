@@ -39,6 +39,10 @@ static void mt7628_intc_set_irq(void *opaque, int irq, int level)
 {
     mt7628intcState *s = opaque;
 
+    if (irq >= 20 && irq <= 22) {
+        // printf("TRYING TO USE UART!! %d (E %d, D %d)\n", level, test_bit(irq, (void *) &s->enable), test_bit(irq, (void *) &s->disable));
+    }
+
     if (level) {
         set_bit(irq, (void *) &s->enable);
         clear_bit(irq, (void *) &s->disable);

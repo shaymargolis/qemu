@@ -109,8 +109,8 @@ enum {
 static void mt7628_eth_update_irq(mt7628EthState *s)
 {
     uint32_t irq = s->irq_stat & s->irq_mask;
-    DPRINTF("irq stat: %08x\n", s->irq_stat);
-    DPRINTF("irq mask: %08x\n", s->irq_mask);
+    // DPRINTF("irq stat: %08x\n", s->irq_stat);
+    // DPRINTF("irq mask: %08x\n", s->irq_mask);
     qemu_set_irq(s->irq, !!irq);
 }
 
@@ -302,6 +302,21 @@ static bool mt7628_eth_can_send(mt7628EthState *s)
 
     return 1;
 }
+void print_bytes(const char *title, unsigned char *buff, int len);
+
+void print_bytes(const char *title, unsigned char *buff, int len)
+{
+    DPRINTF("[%s for len %d]: ", title, len);
+    for (int i = 0; i< len ; i++) {
+        if (i%0x10 == 0) {
+            DPRINTF("\n%08X: ", i);
+        }
+
+        DPRINTF("%02X  ", buff[i]);
+    }
+
+    DPRINTF("\n");
+}
 
 static ssize_t mt7628_eth_send(void *opaque)
 {
@@ -323,6 +338,7 @@ static ssize_t mt7628_eth_send(void *opaque)
     pkt_len = extract32(tx_desc.info1, PKT_LEN_SHIFT, 14);
     dma_memory_read(&address_space_memory, tx_desc.addr,
                     s->tx_buffer, pkt_len, MEMTXATTRS_UNSPECIFIED);
+    print_bytes("mt7628_eth_send", s->tx_buffer, pkt_len);
     qemu_send_packet(nc, s->tx_buffer, pkt_len);
     DPRINTF("%s: pkt send ok, set dma done bit\n", __func__);
     set_bit(PKT_DMA_DONE, (void *)(&tx_desc.info1));
