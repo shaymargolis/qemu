@@ -439,6 +439,7 @@ static void mt7628_eth_write(void *opaque, hwaddr addr,
                                  uint64_t val, unsigned size)
 {
     mt7628EthState *s = opaque;
+
     switch (addr) {
     case REG_TX_BASE_PTR0:
         s->tx_ring_base = val;
@@ -525,6 +526,10 @@ static void mt7628_eth_write(void *opaque, hwaddr addr,
                       __func__, addr);
         break;
     }
+
+    // if (was_disabled && mt7628_eth_can_receive(qemu_get_queue(s->nic))) {
+    //     qemu_flush_queued_packets(qemu_get_queue(s->nic));
+    // }
 }
 
 static const MemoryRegionOps mt7628_eth_ops = {

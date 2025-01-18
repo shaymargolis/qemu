@@ -185,7 +185,7 @@ static void tap_send(void *opaque)
     int size;
     int packets = 0;
 
-    while (true) {
+    while (qemu_can_send_packet(&s->nc)) {
         uint8_t *buf = s->buf;
         uint8_t min_pkt[ETH_ZLEN];
         size_t min_pktsz = sizeof(min_pkt);
