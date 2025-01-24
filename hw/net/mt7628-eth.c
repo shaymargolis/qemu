@@ -79,6 +79,9 @@ enum {
     REG_RX_PACKETS   = 0x00D08,
     REG_RX_BYTES     = 0x00D0C,
 
+    REG_1  = 0x10028,
+    REG_2  = 0x10034,
+
     REG_SWITCH_PCR0  = 0x100C0,
     REG_SWITCH_PCR1  = 0x100C4,
 };
@@ -368,6 +371,12 @@ static uint64_t mt7628_eth_read(void *opaque, hwaddr addr,
 
     uint32_t val = 0x0;
     switch (addr) {
+    case REG_1:
+        val = s->reg1;
+        return val;
+    case REG_2:
+        val = s->reg2;
+        return val;
     case REG_TX_BASE_PTR0:
         val = s->tx_ring_base;
         return val;
@@ -441,6 +450,12 @@ static void mt7628_eth_write(void *opaque, hwaddr addr,
     mt7628EthState *s = opaque;
 
     switch (addr) {
+    case REG_1:
+        s->reg1 = val;
+        break;
+    case REG_2:
+        s->reg2 = val;
+        break;
     case REG_TX_BASE_PTR0:
         s->tx_ring_base = val;
         DPRINTF("%s: set tx ring base to %08x\n", __func__, s->tx_ring_base);
@@ -566,6 +581,9 @@ static void mt7628_eth_reset(DeviceState *dev)
     s->rx_ring_maxi = 0;
     s->rx_ring_cpui = 0;
     s->rx_ring_dmai = 0;
+
+    s->reg1 = 0xffffffff;
+    s->reg2 = 0xffffffff;
 
     s->tx_ring_base = 0;
     s->tx_ring_maxi = 0;

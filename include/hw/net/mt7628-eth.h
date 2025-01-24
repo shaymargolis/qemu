@@ -89,6 +89,10 @@ struct mt7628EthState {
     uint16_t pcr_rd_data;
     bool     pcr_rd_ready;
     bool     pcr_wt_done;
+
+    /* Stuff VLAN */
+    uint32_t reg1;
+    uint32_t reg2;
 };
 
 #endif /* HW_MT7628_ETH_H */
