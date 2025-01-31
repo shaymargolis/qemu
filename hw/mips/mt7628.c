@@ -358,6 +358,19 @@ static void mt7628_realize(DeviceState *dev, Error **errp)
     MemoryRegion *ra_systick = g_new(MemoryRegion, 1);
     memory_region_init_io(ra_systick, NULL, &ra_systick_ops, env, "ra_systick", 0x00c);
     memory_region_add_subregion(get_system_memory(), 0x10000500LL, ra_systick);
+
+    unsigned char *gpio_mem = malloc(4);
+    memset(gpio_mem, 0, 4);
+    *(int *)(gpio_mem) = 1 << (0x26 & 0x1F);
+    MemoryRegion *gpio = g_new(MemoryRegion, 1);
+    // memory_region_init_rom(ra_systick, NULL, &ra_systick_ops, env, "ra_systick", 0x00c);
+    memory_region_init_ram_ptr(gpio, NULL, "gpio", 4, gpio_mem);
+    // memory_region_init_ram_ptr(MemoryRegion *mr,
+    //                             Object *owner,
+    //                             const char *name,
+    //                             uint64_t size,
+    //                             void *ptr);
+    memory_region_add_subregion(get_system_memory(), 0x10000624LL, gpio);
 }
 
 static void mt7628_class_init(ObjectClass *oc, void *data)
