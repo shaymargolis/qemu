@@ -101,16 +101,21 @@ static void mt7628_spi_transfer(mt7628SpiState *s)
     qemu_irq_lower(s->cs_lines[0]);
     qemu_irq_lower(s->cs_lines[1]);
 
+    uint32_t *data_reg = (uint32_t *)s->dido;
     uint8_t txbuf[MT7628_SPI_TX_BUFSIZE];
     uint8_t *txbufp = txbuf;
     memset(txbuf, 0, MT7628_SPI_TX_BUFSIZE);
 
     uint32_t val = s->opcode;
-    if ((s->cmd_bitcount / 8) == 4) {
+    if (s->lsb_first) { /* || (s->cmd_bitcount / 8) == 4) { */
         /* The byte-order of the opcode is weird!    --- from linux kernel */
         val = bswap32(val);
-        DPRINTF("opcode len is 4, swap it! : %08X\n", val);
+    } else {
+        /* The opcode is the LSB, but the address (1-3 bytes) is still reversed */
+        val = (val & 0xFF) + ((__builtin_bswap32(val >> 8)));
+        data_reg[0] = (data_reg[0] & 0xFF) + ((__builtin_bswap32(data_reg[0] >> 8)));
     }
+
     memcpy(txbufp, &val, s->cmd_bitcount / 8);
     txbufp += s->cmd_bitcount / 8;
     // memcpy(txbufp, &val, 1);
