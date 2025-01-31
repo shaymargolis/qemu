@@ -41,6 +41,7 @@ struct mt7628SpiState {
 
     bool bufmode;     /* 0 disable morebuf, 1 enable morebuf */
     bool full_duplex; /* 0 half, 1 full   */
+    bool lsb_first; /* 0 msb first, 1 lsb first */
 
     bool trans_busy;  /* 0 no task, 1 pending */
     bool trans_start; /* write 1 start transfer action */

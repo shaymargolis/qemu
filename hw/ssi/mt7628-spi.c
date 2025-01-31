@@ -70,6 +70,7 @@ enum {
 #define MOREBUF_CMDBITCNT   24
 #define MASTER_BUFMODE      2
 #define MASTER_FULL_DUPLEX  10
+#define MASTER_LSB_FIRST    2
 
 static void mt7628_spi_update_select(mt7628SpiState *s)
 {
@@ -147,6 +148,7 @@ static void mt7628_spi_reset(DeviceState *d)
     s->trans_busy = 0;
     s->bufmode = 0;
     s->full_duplex = 0;
+    s->lsb_first = 0;
     s->tx_bitcount = 0;
     s->rx_bitcount = 0;
     s->cmd_bitcount = 0;
@@ -198,6 +200,7 @@ static uint64_t mt7628_spi_read(void *opaque, hwaddr addr, unsigned int size)
     case REG_SPI_MASTER:
         val |= s->bufmode << MASTER_BUFMODE;
         val |= s->full_duplex << MASTER_FULL_DUPLEX;
+        val |= s->lsb_first << MASTER_LSB_FIRST;
         return val;
     case REG_SPI_CS_POLAR:
         val |= s->cs_status[0] << 0;
@@ -265,6 +268,7 @@ static void mt7628_spi_write(void *opaque, hwaddr addr,
     case REG_SPI_MASTER:
         s->bufmode     = test_bit(MASTER_BUFMODE, (void *)&value);
         s->full_duplex = test_bit(MASTER_FULL_DUPLEX, (void *)&value);
+        s->lsb_first   = test_bit(MASTER_LSB_FIRST, (void *)&value);
         break;
     case REG_SPI_CS_POLAR:
         s->cs_status[0] = test_bit(0, (void *)&value);
