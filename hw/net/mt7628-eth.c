@@ -111,9 +111,10 @@ enum {
 
 static void mt7628_eth_update_irq(mt7628EthState *s)
 {
-    uint32_t irq = s->irq_stat & s->irq_mask;
-    // DPRINTF("irq stat: %08x\n", s->irq_stat);
-    // DPRINTF("irq mask: %08x\n", s->irq_mask);
+    uint32_t irq = s->irq_stat & s->irq_mask & (1 << INT_RX_DONE);
+    DPRINTF("[%s] irq stat: %08x\n", func, s->irq_stat);
+    DPRINTF("[%s] irq mask: %08x\n", func, s->irq_mask);
+    DPRINTF("[%s] irq: %08x => %08x\n", func, irq, !!irq);
     qemu_set_irq(s->irq, !!irq);
 }
 
