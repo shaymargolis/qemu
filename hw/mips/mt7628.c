@@ -291,7 +291,7 @@ static void mt7628_realize(DeviceState *dev, Error **errp)
 
     /* spi nor flash, default attach a w25q64 (8 MiB) */
     DriveInfo *dinfo = drive_get(IF_MTD, 0, 0);
-    DeviceState *spi_flash;
+    DeviceState *spi_flash = NULL;
     qemu_irq cs_line;
     if (dinfo) {
         spi_flash = qdev_new("w25q64");
@@ -301,6 +301,28 @@ static void mt7628_realize(DeviceState *dev, Error **errp)
         sysbus_connect_irq(SYS_BUS_DEVICE(spi_bus), 0, cs_line);
     }
 
+    s->found_flash = false;
+
+    if (spi_flash) {
+        s->found_flash = true;
+
+        uint8_t *storage = m25p80_get_storage(spi_flash);
+
+        printf("spi_flash %016lX\n", (unsigned long)storage);
+
+        MemoryRegion *flash_direct = g_new(MemoryRegion, 1);
+        memory_region_init_ram_ptr(flash_direct,
+                                    NULL,
+                                    "mt7628.direct_flash",
+                                    8 * 1024 * 1024,
+                                    storage);
+        memory_region_set_readonly(flash_direct, true);
+        memory_region_add_subregion(
+            get_system_memory(),
+            s->memmap[MT7628_DEV_FLASH_DIRECT] + 0x00000,
+            flash_direct
+        );   
+    }
 
     /* UART x 3 */
     SerialMM *smm;
@@ -521,19 +543,29 @@ static void mt7628_board_init(MachineState *machine)
                                 &mt7628->bootrom);
     filename = qemu_find_file(QEMU_FILE_TYPE_BIOS,
                               machine->firmware ?: BIOS_FILENAME);
-    MemoryRegion *bios = g_new(MemoryRegion, 1);
-    memory_region_init_rom(bios, NULL, "mt7628.direct_flash", bios_size,
-                               &error_fatal);
-    memory_region_add_subregion(get_system_memory(), mt7628->memmap[MT7628_DEV_FLASH_DIRECT] + 0x30000, bios);
-    if (filename) {
+
+
+    if (mt7628->found_flash && NULL != filename) {
+        error_report("Cannot add both flash and bios");
+        exit(1);
+    }
+
+    if (NULL != filename) {
+        MemoryRegion *bios = g_new(MemoryRegion, 1);
+        memory_region_init_rom(bios, NULL, "mt7628.direct_flash", bios_size,
+                                   &error_fatal);
+        memory_region_add_subregion(get_system_memory(), mt7628->memmap[MT7628_DEV_FLASH_DIRECT] + 0x00000, bios);
+
         printf("Loading filename %s\n", filename);
-        int written_bios_size = load_image_targphys(filename, mt7628->memmap[MT7628_DEV_FLASH_DIRECT] + 0x30000,
+        int written_bios_size = load_image_targphys(filename, mt7628->memmap[MT7628_DEV_FLASH_DIRECT] + 0x00000,
                             bios_size);
         printf("Written %d out of %d\n", written_bios_size, bios_size);
         g_free(filename);
-        reset_info->vector = (target_long)(int32_t)
-                             (mt7628->memmap[MT7628_DEV_FLASH_DIRECT] + 0xA0030000);
     }
+
+    reset_info->vector = (target_long)(int32_t)
+        (mt7628->memmap[MT7628_DEV_FLASH_DIRECT] + 0xA0030000);
+
     /* Load kernel to RAM & goto kernel */
     if (kernel_filename) {
         loaderparams.ram_size = machine->ram_size;

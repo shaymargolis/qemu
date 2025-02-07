@@ -72,6 +72,8 @@ struct mt7628State {
     DeviceState parent_obj;
     /*< public >*/
 
+    bool found_flash;
+
     MIPSCPU *cpu;
     const hwaddr *memmap;
     mt7628SysCtrlState sysctrl;
