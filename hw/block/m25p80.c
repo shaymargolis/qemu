@@ -25,6 +25,7 @@
 #include "qemu/units.h"
 #include "sysemu/block-backend.h"
 #include "hw/block/block.h"
+#include "include/hw/block/flash.h"
 #include "hw/qdev-properties.h"
 #include "hw/qdev-properties-system.h"
 #include "hw/ssi/ssi.h"
@@ -577,6 +578,13 @@ static inline void flash_sync_area(Flash *s, int64_t off, int64_t len)
     qemu_iovec_add(iov, s->storage + off, len);
     blk_aio_pwritev(s->blk, off, iov, 0, blk_sync_complete, iov);
 }
+
+uint8_t *m25p80_get_storage(DeviceState *dev)
+{
+    Flash *f = M25P80(dev);
+    return f->storage;
+}
+
 
 static void flash_erase(Flash *s, int offset, FlashCMD cmd)
 {
