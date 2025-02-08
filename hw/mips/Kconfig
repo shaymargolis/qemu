@@ -14,7 +14,6 @@ config MT7628
     bool
     select MT7628_SYSCTRL
     select MT7628_INTC
-    select MT7628_TIMER
     select MT7628_SPI
     select SERIAL
     select SSI_M25P80

@@ -27,7 +27,6 @@
 #include "hw/usb/hcd-ehci.h"
 #include "hw/misc/mt7628-sysctrl.h"
 #include "hw/intc/mt7628-intc.h"
-#include "hw/timer/mt7628-timer.h"
 #include "hw/ssi/mt7628-spi.h"
 #include "hw/net/mt7628-eth.h"
 
@@ -79,7 +78,6 @@ struct mt7628State {
     const hwaddr *memmap;
     mt7628SysCtrlState sysctrl;
     mt7628intcState intc;
-    mt7628TimerState ratick;
     mt7628SpiState spi;
     EHCISysBusState ehci;
     OHCISysBusState ohci;
