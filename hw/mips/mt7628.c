@@ -158,13 +158,8 @@ static void rasystick_timer_expire(CPUMIPSState *env)
         return;
     }
 
-    systick_count++;
-
-    // if (systick_count > systick_compare) {
-    //     systick_count = systick_compare;
-    // }
-
     if (systick_count < systick_compare) {
+        systick_count++;
         return;
     }
 
@@ -443,6 +438,19 @@ static void main_cpu_reset(void *opaque)
     if (s->vector & 1) {
         env->hflags |= MIPS_HFLAG_M16;
     }
+
+    systick_enabled = false;
+    systick_config = 0;
+    systick_compare = 0;
+    systick_count = 0;
+
+    if (ra_systick != NULL) {
+        timer_free(ra_systick);
+        ra_systick = NULL;
+    }
+
+    ra_systick = timer_new_ns(QEMU_CLOCK_VIRTUAL, &rasystick_timer_cb, env);
+    rasystick_timer_cb(env);
 }
 
 static uint64_t load_kernel(void)
