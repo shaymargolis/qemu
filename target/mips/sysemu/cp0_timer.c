@@ -117,7 +117,7 @@ static void mips_timer_cb(void *opaque)
 
     env = opaque;
 
-    if (env->CP0_Cause & (1 << CP0Ca_DC)) {
+    if (env->timer_disabled || env->CP0_Cause & (1 << CP0Ca_DC)) {
         return;
     }
 
@@ -134,6 +134,7 @@ static void mips_timer_cb(void *opaque)
 void cpu_mips_clock_init(MIPSCPU *cpu)
 {
     CPUMIPSState *env = &cpu->env;
+    env->timer_disabled = false;
 
     /*
      * If we're in KVM mode, don't create the periodic timer, that is handled in

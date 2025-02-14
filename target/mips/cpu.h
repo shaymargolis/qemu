@@ -1162,6 +1162,7 @@ typedef struct CPUArchState {
     QEMUTimer *timer; /* Internal timer */
     target_ulong exception_base; /* ExceptionBase input to the core */
     uint64_t cp0_count_ns; /* CP0_Count clock period (in nanoseconds) */
+    bool timer_disabled;
 } CPUMIPSState;
 
 /**
