@@ -234,7 +234,9 @@ static void ra_systick_write(void *opaque, hwaddr addr,
         systick_enabled = (systick_config & CFG_CNT_EN) != 0;
 
         if (systick_enabled) {
-            timer_del(env->timer);
+            env->timer_disabled = true;
+        } else {
+            env->timer_disabled = false;
         }
         break;
     case SYSTICK_COUNT:
