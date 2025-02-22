@@ -38,6 +38,7 @@
 #include "hw/ssi/ssi.h"
 #include "hw/ssi/mt7628-spi.h"
 #include "sysemu/sysemu.h"
+#include "include/exec/tb-flush.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
 #include "elf.h"
@@ -432,6 +433,8 @@ static void main_cpu_reset(void *opaque)
 {
     ResetData *s = (ResetData *) opaque;
     CPUMIPSState *env = &s->cpu->env;
+
+    tb_flush(CPU(s->cpu));
 
     cpu_reset(CPU(s->cpu));
     env->active_tc.PC = s->vector & ~(target_ulong) 1;
