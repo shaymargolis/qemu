@@ -41,6 +41,7 @@
 #include "include/exec/tb-flush.h"
 #include "hw/boards.h"
 #include "hw/loader.h"
+#include "hw/clock.h"
 #include "elf.h"
 #include "hw/sysbus.h"
 #include "hw/qdev-properties.h"
@@ -115,7 +116,7 @@ static void mt7628_init(Object *obj)
     }
 }
 
-static QEMUTimer *ra_systick = NULL;
+// static QEMUTimer *ra_systick = NULL;
 
 #define SYSTICK_FREQ        (50 * 1000)
 // #define SYSTICK_FREQ        (50 * 1000 * 1000)
@@ -138,58 +139,65 @@ static bool systick_enabled = false;
 static u32 systick_config = 0;
 static u32 systick_compare = 0;
 static u32 systick_count = 0;
+static uint64_t orig_env_cp0_count_ns = 0;
 
 /* MIPS R4K timer */
-static void rasystick_timer_update(CPUMIPSState *env)
-{
-    uint64_t now_ns, next_ns;
+// static void rasystick_timer_update(CPUMIPSState *env)
+// {
+//     uint64_t now_ns, next_ns;
 
-    now_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
-    next_ns = now_ns + SYSTICK_INTERVAL_NS;
-    // printf("Modding to %lu\n", next_ns);
-    timer_mod(ra_systick, next_ns);
-}
+//     now_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+//     next_ns = now_ns + SYSTICK_INTERVAL_NS;
+//     // printf("Modding to %lu\n", next_ns);
+//     timer_mod(ra_systick, next_ns);
+// }
 
 /* Expire the timer.  */
-static void rasystick_timer_expire(CPUMIPSState *env)
-{
-    rasystick_timer_update(env);
+// static void rasystick_timer_expire(CPUMIPSState *env)
+// {
+//     rasystick_timer_update(env);
 
-    if (!systick_enabled) {
-        return;
-    }
+//     if (!systick_enabled) {
+//         return;
+//     }
 
-    if (systick_count < systick_compare) {
-        systick_count++;
-        return;
-    }
+//     if (systick_count < systick_compare) {
+//         systick_count++;
+//         return;
+//     }
 
-    env->CP0_Cause |= 1 << CP0Ca_TI;
+//     env->CP0_Cause |= 1 << CP0Ca_TI;
 
-    // printf("Raising irq\n");
+//     // printf("Raising irq\n");
 
-    // qemu_irq_raise(env->irq[5]);
-    qemu_irq_raise(env->irq[7]);
-}
+//     // qemu_irq_raise(env->irq[5]);
+//     qemu_irq_raise(env->irq[7]);
+// }
 
-static void rasystick_timer_cb(void *opaque)
-{
-    CPUMIPSState *env;
+// static void rasystick_timer_cb(void *opaque)
+// {
+//     CPUMIPSState *env;
 
-    env = opaque;
+//     env = opaque;
 
-    rasystick_timer_expire(env);
-}
+//     rasystick_timer_expire(env);
+// }
 
 static void create_ra_systick(CPUMIPSState *env)
 {
-    ra_systick = timer_new_ns(QEMU_CLOCK_VIRTUAL, &rasystick_timer_cb, env);
-    rasystick_timer_cb(env);
+    // ra_systick = timer_new_ns(QEMU_CLOCK_VIRTUAL, &rasystick_timer_cb, env);
+    // rasystick_timer_cb(env);
+    orig_env_cp0_count_ns = env->cp0_count_ns;
 }
+
+uint32_t cpu_mips_get_count(CPUMIPSState *env);
 
 static uint64_t ra_systick_read(void *opaque, hwaddr addr,
                                unsigned size)
 {
+    CPUMIPSState *env;
+    env = opaque;
+
     u32 val;
 
     switch(addr) {
@@ -197,10 +205,10 @@ static uint64_t ra_systick_read(void *opaque, hwaddr addr,
         val = systick_config;
         break;
     case SYSTICK_COUNT:
-        val = systick_count;
+        val = cpu_mips_get_count(env);
         break;
     case SYSTICK_COMPARE:
-        val = systick_compare;
+        val = env->CP0_Compare;
         break;
     default:
         val = -1;
@@ -211,6 +219,9 @@ static uint64_t ra_systick_read(void *opaque, hwaddr addr,
 
     return val;
 }
+
+void cpu_mips_store_count(CPUMIPSState *env, uint32_t count);
+void cpu_mips_store_compare(CPUMIPSState *env, uint32_t value);
 
 static void ra_systick_write(void *opaque, hwaddr addr,
                             uint64_t value, unsigned size)
@@ -229,21 +240,26 @@ static void ra_systick_write(void *opaque, hwaddr addr,
 
         systick_enabled = (systick_config & CFG_CNT_EN) != 0;
 
-        if (systick_enabled) {
-            env->timer_disabled = true;
-        } else {
-            env->timer_disabled = false;
-        }
+        printf("Setting to %u\n", SYSTICK_INTERVAL_NS);
+        env->cp0_count_ns = SYSTICK_INTERVAL_NS;
+
+        // if (systick_enabled) {
+        //     env->timer_disabled = true;
+        // } else {
+        //     env->timer_disabled = false;
+        // }
         break;
     case SYSTICK_COUNT:
         // Disallow writing to the count
         // systick_count = val;
         break;
     case SYSTICK_COMPARE:
-        systick_compare = val;
-        // systick_count = 0;
-        qemu_irq_lower(env->irq[7]);
-        env->CP0_Cause &= ~(1 << CP0Ca_TI);
+        env->cp0_count_ns = SYSTICK_INTERVAL_NS;
+        cpu_mips_store_compare(env, val);
+        // systick_compare = val;
+        // // systick_count = 0;
+        // qemu_irq_lower(env->irq[7]);
+        // env->CP0_Cause &= ~(1 << CP0Ca_TI);
         break;
     default:
         val = -1;
@@ -447,13 +463,15 @@ static void main_cpu_reset(void *opaque)
     systick_compare = 0;
     systick_count = 0;
 
-    if (ra_systick != NULL) {
-        timer_free(ra_systick);
-        ra_systick = NULL;
-    }
+    env->cp0_count_ns = orig_env_cp0_count_ns;
 
-    ra_systick = timer_new_ns(QEMU_CLOCK_VIRTUAL, &rasystick_timer_cb, env);
-    rasystick_timer_cb(env);
+    // if (ra_systick != NULL) {
+    //     timer_free(ra_systick);
+    //     ra_systick = NULL;
+    // }
+
+    // ra_systick = timer_new_ns(QEMU_CLOCK_VIRTUAL, &rasystick_timer_cb, env);
+    // rasystick_timer_cb(env);
 }
 
 static uint64_t load_kernel(void)
