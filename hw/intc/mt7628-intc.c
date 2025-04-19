@@ -87,10 +87,10 @@ static void mt7628_intc_write(void *opaque, hwaddr offset, uint64_t value,
         s->type = value;
         break;
     case MT7628_INTC_REG_ENABLE:
-        s->enable = value;
+        s->enable = value | s->enable;
         break;
     case MT7628_INTC_REG_DISABLE:
-        s->disable = value;
+        s->disable = value | s->disable;
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
