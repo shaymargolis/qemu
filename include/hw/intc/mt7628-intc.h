@@ -16,8 +16,8 @@ OBJECT_DECLARE_SIMPLE_TYPE(mt7628intcState, MT7628_INTC)
 
 #define MT7628_INTC_REG_STATUS0     (0x9c)
 #define MT7628_INTC_REG_TYPE        (0x6c)
-#define MT7628_INTC_REG_ENABLE      (0x80)
-#define MT7628_INTC_REG_DISABLE     (0x78)
+#define MT7628_INTC_REG_MASK_CLEAR     (0x78)
+#define MT7628_INTC_REG_MASK_SET      (0x80)
 
 #define MT7628_INTC_REGS_MAXADDR (0xFF)
 
@@ -30,7 +30,7 @@ struct mt7628intcState {
 
     uint32_t type;
     uint32_t enable;
-    uint32_t disable;
+    uint32_t mask;
     /*priority setting here*/
 };
 

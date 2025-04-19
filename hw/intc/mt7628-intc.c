@@ -26,13 +26,7 @@
 
 static void mt7628_intc_update(mt7628intcState *s)
 {
-    int i;
-    for (i = 0; i < 32; i++) {
-        if (test_bit(i, (void *) &s->disable)) {
-            clear_bit(i, (void *) &s->enable);
-        }
-    }
-    qemu_set_irq(s->parent_irq, !!(s->enable));
+    qemu_set_irq(s->parent_irq, !!(s->enable & (s->mask)));
 }
 
 static void mt7628_intc_set_irq(void *opaque, int irq, int level)
@@ -45,10 +39,8 @@ static void mt7628_intc_set_irq(void *opaque, int irq, int level)
 
     if (level) {
         set_bit(irq, (void *) &s->enable);
-        clear_bit(irq, (void *) &s->disable);
     } else {
         clear_bit(irq, (void *) &s->enable);
-        set_bit(irq, (void *) &s->disable);
     }
     mt7628_intc_update(s);
 }
@@ -63,10 +55,14 @@ static uint64_t mt7628_intc_read(void *opaque, hwaddr offset,
         return s->enable;
     case MT7628_INTC_REG_TYPE:
         return s->type;
-    case MT7628_INTC_REG_ENABLE:
-        return s->enable;
-    case MT7628_INTC_REG_DISABLE:
-        return s->disable;
+    case MT7628_INTC_REG_MASK_SET:
+        // return s->enable;
+        // WO
+        return 0;
+    case MT7628_INTC_REG_MASK_CLEAR:
+        // return s->disable;
+        // WO
+        return 0;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
                       "%s: not imp offset 0x%x\n", __func__, (int) offset);
@@ -86,11 +82,11 @@ static void mt7628_intc_write(void *opaque, hwaddr offset, uint64_t value,
     case MT7628_INTC_REG_TYPE:
         s->type = value;
         break;
-    case MT7628_INTC_REG_ENABLE:
-        s->enable = value | s->enable;
+    case MT7628_INTC_REG_MASK_SET:
+        s->mask = s->mask | value;
         break;
-    case MT7628_INTC_REG_DISABLE:
-        s->disable = value | s->disable;
+    case MT7628_INTC_REG_MASK_CLEAR:
+        s->mask = s->mask & (~value);
         break;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
@@ -131,7 +127,7 @@ static void mt7628_intc_reset(DeviceState *d)
 
     s->type    = 0b00000000000000000000000000000000;
     s->enable  = 0b00000000000000000000000000000000;
-    s->disable = 0b00000000000000000000000000000000;
+    s->mask    = 0b00000000000000000000000000000000;
 }
 
 static void mt7628_intc_class_init(ObjectClass *klass, void *data)
