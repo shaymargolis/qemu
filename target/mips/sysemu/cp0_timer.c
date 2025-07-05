@@ -34,9 +34,19 @@ static void cpu_mips_timer_update(CPUMIPSState *env)
     uint32_t wait;
 
     now_ns = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+
     wait = env->CP0_Compare - env->CP0_Count -
            (uint32_t)(now_ns / env->cp0_count_ns);
     next_ns = now_ns + (uint64_t)wait * env->cp0_count_ns;
+
+    if (env->timer_mt7628) {
+        // we are in business.
+        if (next_ns > now_ns + 250 * env->cp0_count_ns) {
+            timer_mod(env->timer, now_ns + 250 * env->cp0_count_ns);
+            return;
+        }
+    }
+
     timer_mod(env->timer, next_ns);
 }
 
@@ -135,6 +145,7 @@ void cpu_mips_clock_init(MIPSCPU *cpu)
 {
     CPUMIPSState *env = &cpu->env;
     env->timer_disabled = false;
+    env->timer_mt7628 = false;
 
     /*
      * If we're in KVM mode, don't create the periodic timer, that is handled in

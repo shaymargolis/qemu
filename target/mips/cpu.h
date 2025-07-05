@@ -1163,6 +1163,7 @@ typedef struct CPUArchState {
     target_ulong exception_base; /* ExceptionBase input to the core */
     uint64_t cp0_count_ns; /* CP0_Count clock period (in nanoseconds) */
     bool timer_disabled;
+    bool timer_mt7628;
 } CPUMIPSState;
 
 /**

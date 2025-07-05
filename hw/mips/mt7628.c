@@ -242,6 +242,9 @@ static void ra_systick_write(void *opaque, hwaddr addr,
 
         printf("Setting to %u\n", SYSTICK_INTERVAL_NS);
         env->cp0_count_ns = SYSTICK_INTERVAL_NS;
+        // env->CP0_Compare = 0;
+        // env->CP0_Count = 0;
+        env->timer_mt7628 = true;
 
         // if (systick_enabled) {
         //     env->timer_disabled = true;
